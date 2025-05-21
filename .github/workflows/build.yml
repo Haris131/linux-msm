@@ -42,7 +42,7 @@ jobs:
         export ARCH=arm64
         export LOCALVERSION=
         make LOCALVERSION= mrproper
-        make msm8916_defconfig
+        make uz801v3_defconfig
         make LOCALVERSION= Image modules dtbs -j$(nproc)
         make LOCALVERSION= INSTALL_MOD_PATH=modules modules_install
 
