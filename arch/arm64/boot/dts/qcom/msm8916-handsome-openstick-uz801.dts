@@ -44,6 +44,7 @@
 		led_internet: internet {
 			label = "green:internet";
 			gpios = <&msmgpio 8 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "phy0link";
 			default-state = "off";
 		};
 
