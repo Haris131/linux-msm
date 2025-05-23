@@ -36,6 +36,8 @@ jobs:
     - name: Compile kernel
       run: |
         mkdir modules
+        wget https://github.com/Seey6/HandsomeMod/commit/baeb414dc1710ef07626a8a0172959c1c2f2b303.patch
+        patch -p1 < *.patch
         sed -i "s/Handsome OpenStick UZ801/UZ801 V3.2/g" arch/arm64/boot/dts/qcom/*uz801*.dts
         export CROSS_COMPILE=aarch64-linux-gnu-
         export ARCH=arm64
