@@ -137,8 +137,6 @@ struct wcn36xx_vif {
 	u8 self_ucast_dpu_sign;
 
 	struct list_head sta_list;
-
-	int bmps_fail_ct;
 };
 
 /**
@@ -181,14 +179,7 @@ struct wcn36xx_sta {
 	enum wcn36xx_ampdu_state ampdu_state[16];
 	int non_agg_frame_ct;
 };
-
 struct wcn36xx_dxe_ch;
-
-struct wcn36xx_chan_survey {
-	s8	rssi;
-	u8	snr;
-};
-
 struct wcn36xx {
 	struct ieee80211_hw	*hw;
 	struct device		*dev;
