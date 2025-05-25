@@ -27,6 +27,7 @@
 #include <linux/soc/qcom/wcnss_ctrl.h>
 #include "wcn36xx.h"
 #include "testmode.h"
+#include "firmware.h"
 
 unsigned int wcn36xx_dbg_mask;
 module_param_named(debug_mask, wcn36xx_dbg_mask, uint, 0644);
@@ -84,7 +85,9 @@ static struct ieee80211_channel wcn_5ghz_channels[] = {
 	CHAN5G(5620, 124, PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_HIGH),
 	CHAN5G(5640, 128, PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_HIGH),
 	CHAN5G(5660, 132, PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_LOW),
+	CHAN5G(5680, 136, PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_LOW),
 	CHAN5G(5700, 140, PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_HIGH),
+	CHAN5G(5720, 144, PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_HIGH),
 	CHAN5G(5745, 149, PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_LOW),
 	CHAN5G(5765, 153, PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_LOW),
 	CHAN5G(5785, 157, PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_HIGH),
@@ -185,84 +188,15 @@ static inline u8 get_sta_index(struct ieee80211_vif *vif,
 	       sta_priv->sta_index;
 }
 
-static const char * const wcn36xx_caps_names[] = {
-	"MCC",				/* 0 */
-	"P2P",				/* 1 */
-	"DOT11AC",			/* 2 */
-	"SLM_SESSIONIZATION",		/* 3 */
-	"DOT11AC_OPMODE",		/* 4 */
-	"SAP32STA",			/* 5 */
-	"TDLS",				/* 6 */
-	"P2P_GO_NOA_DECOUPLE_INIT_SCAN",/* 7 */
-	"WLANACTIVE_OFFLOAD",		/* 8 */
-	"BEACON_OFFLOAD",		/* 9 */
-	"SCAN_OFFLOAD",			/* 10 */
-	"ROAM_OFFLOAD",			/* 11 */
-	"BCN_MISS_OFFLOAD",		/* 12 */
-	"STA_POWERSAVE",		/* 13 */
-	"STA_ADVANCED_PWRSAVE",		/* 14 */
-	"AP_UAPSD",			/* 15 */
-	"AP_DFS",			/* 16 */
-	"BLOCKACK",			/* 17 */
-	"PHY_ERR",			/* 18 */
-	"BCN_FILTER",			/* 19 */
-	"RTT",				/* 20 */
-	"RATECTRL",			/* 21 */
-	"WOW",				/* 22 */
-	"WLAN_ROAM_SCAN_OFFLOAD",	/* 23 */
-	"SPECULATIVE_PS_POLL",		/* 24 */
-	"SCAN_SCH",			/* 25 */
-	"IBSS_HEARTBEAT_OFFLOAD",	/* 26 */
-	"WLAN_SCAN_OFFLOAD",		/* 27 */
-	"WLAN_PERIODIC_TX_PTRN",	/* 28 */
-	"ADVANCE_TDLS",			/* 29 */
-	"BATCH_SCAN",			/* 30 */
-	"FW_IN_TX_PATH",		/* 31 */
-	"EXTENDED_NSOFFLOAD_SLOT",	/* 32 */
-	"CH_SWITCH_V1",			/* 33 */
-	"HT40_OBSS_SCAN",		/* 34 */
-	"UPDATE_CHANNEL_LIST",		/* 35 */
-	"WLAN_MCADDR_FLT",		/* 36 */
-	"WLAN_CH144",			/* 37 */
-	"NAN",				/* 38 */
-	"TDLS_SCAN_COEXISTENCE",	/* 39 */
-	"LINK_LAYER_STATS_MEAS",	/* 40 */
-	"MU_MIMO",			/* 41 */
-	"EXTENDED_SCAN",		/* 42 */
-	"DYNAMIC_WMM_PS",		/* 43 */
-	"MAC_SPOOFED_SCAN",		/* 44 */
-	"BMU_ERROR_GENERIC_RECOVERY",	/* 45 */
-	"DISA",				/* 46 */
-	"FW_STATS",			/* 47 */
-	"WPS_PRBRSP_TMPL",		/* 48 */
-	"BCN_IE_FLT_DELTA",		/* 49 */
-	"TDLS_OFF_CHANNEL",		/* 51 */
-	"RTT3",				/* 52 */
-	"MGMT_FRAME_LOGGING",		/* 53 */
-	"ENHANCED_TXBD_COMPLETION",	/* 54 */
-	"LOGGING_ENHANCEMENT",		/* 55 */
-	"EXT_SCAN_ENHANCED",		/* 56 */
-	"MEMORY_DUMP_SUPPORTED",	/* 57 */
-	"PER_PKT_STATS_SUPPORTED",	/* 58 */
-	"EXT_LL_STAT",			/* 60 */
-	"WIFI_CONFIG",			/* 61 */
-	"ANTENNA_DIVERSITY_SELECTION",	/* 62 */
-};
-
-static const char *wcn36xx_get_cap_name(enum place_holder_in_cap_bitmap x)
-{
-	if (x >= ARRAY_SIZE(wcn36xx_caps_names))
-		return "UNKNOWN";
-	return wcn36xx_caps_names[x];
-}
-
 static void wcn36xx_feat_caps_info(struct wcn36xx *wcn)
 {
 	int i;
 
 	for (i = 0; i < MAX_FEATURE_SUPPORTED; i++) {
-		if (get_feat_caps(wcn->fw_feat_caps, i))
-			wcn36xx_dbg(WCN36XX_DBG_MAC, "FW Cap %s\n", wcn36xx_get_cap_name(i));
+		if (wcn36xx_firmware_get_feat_caps(wcn->fw_feat_caps, i)) {
+			wcn36xx_dbg(WCN36XX_DBG_MAC, "FW Cap %s\n",
+				    wcn36xx_firmware_get_cap_name(i));
+		}
 	}
 }
 
@@ -331,6 +265,7 @@ static int wcn36xx_start(struct ieee80211_hw *hw)
 
 	INIT_LIST_HEAD(&wcn->vif_list);
 	spin_lock_init(&wcn->dxe_lock);
+	spin_lock_init(&wcn->survey_lock);
 
 	return 0;
 
@@ -396,11 +331,41 @@ static void wcn36xx_change_opchannel(struct wcn36xx *wcn, int ch)
 {
 	struct ieee80211_vif *vif = NULL;
 	struct wcn36xx_vif *tmp;
+	struct ieee80211_supported_band *band;
+	struct ieee80211_channel *channel = NULL;
+	unsigned long flags;
+	int i, j;
+
+	for (i = 0; i < ARRAY_SIZE(wcn->hw->wiphy->bands); i++) {
+		band = wcn->hw->wiphy->bands[i];
+		if (!band)
+			break;
+		for (j = 0; j < band->n_channels; j++) {
+			if (HW_VALUE_CHANNEL(band->channels[j].hw_value) == ch) {
+				channel = &band->channels[j];
+				break;
+			}
+		}
+		if (channel)
+			break;
+	}
+
+	if (!channel) {
+		wcn36xx_err("Cannot tune to channel %d\n", ch);
+		return;
+	}
+
+	spin_lock_irqsave(&wcn->survey_lock, flags);
+	wcn->band = band;
+	wcn->channel = channel;
+	spin_unlock_irqrestore(&wcn->survey_lock, flags);
 
 	list_for_each_entry(tmp, &wcn->vif_list, list) {
 		vif = wcn36xx_priv_to_vif(tmp);
 		wcn36xx_smd_switch_channel(wcn, vif, ch);
 	}
+
+	return;
 }
 
 static int wcn36xx_config(struct ieee80211_hw *hw, u32 changed)
@@ -437,6 +402,13 @@ static int wcn36xx_config(struct ieee80211_hw *hw, u32 changed)
 
 	if (changed & IEEE80211_CONF_CHANGE_PS)
 		wcn36xx_change_ps(wcn, hw->conf.flags & IEEE80211_CONF_PS);
+
+	if (changed & IEEE80211_CONF_CHANGE_IDLE) {
+		if (hw->conf.flags & IEEE80211_CONF_IDLE)
+			wcn36xx_smd_enter_imps(wcn);
+		else
+			wcn36xx_smd_exit_imps(wcn);
+	}
 
 	mutex_unlock(&wcn->conf_mutex);
 
@@ -656,19 +628,19 @@ static int wcn36xx_hw_scan(struct ieee80211_hw *hw,
 			   struct ieee80211_scan_request *hw_req)
 {
 	struct wcn36xx *wcn = hw->priv;
-	int i;
 
-	if (!get_feat_caps(wcn->fw_feat_caps, SCAN_OFFLOAD)) {
+	if (!wcn36xx_firmware_get_feat_caps(wcn->fw_feat_caps, SCAN_OFFLOAD)) {
 		/* fallback to mac80211 software scan */
 		return 1;
 	}
 
-	/* For unknown reason, the hardware offloaded scan only works with
-	 * 2.4Ghz channels, fallback to software scan in other cases.
+	/* Firmware scan offload is limited to 48 channels, fallback to
+	 * software driven scanning otherwise.
 	 */
-	for (i = 0; i < hw_req->req.n_channels; i++) {
-		if (hw_req->req.channels[i]->band != NL80211_BAND_2GHZ)
-			return 1;
+	if (hw_req->req.n_channels > 48) {
+		wcn36xx_warn("Offload scan aborted, n_channels=%u",
+			     hw_req->req.n_channels);
+		return 1;
 	}
 
 	mutex_lock(&wcn->scan_lock);
@@ -694,7 +666,7 @@ static void wcn36xx_cancel_hw_scan(struct ieee80211_hw *hw,
 	wcn->scan_aborted = true;
 	mutex_unlock(&wcn->scan_lock);
 
-	if (get_feat_caps(wcn->fw_feat_caps, SCAN_OFFLOAD)) {
+	if (wcn36xx_firmware_get_feat_caps(wcn->fw_feat_caps, SCAN_OFFLOAD)) {
 		/* ieee80211_scan_completed will be called on FW scan
 		 * indication */
 		wcn36xx_smd_stop_hw_scan(wcn);
@@ -708,6 +680,8 @@ static void wcn36xx_sw_scan_start(struct ieee80211_hw *hw,
 	struct wcn36xx *wcn = hw->priv;
 	struct wcn36xx_vif *vif_priv = wcn36xx_vif_to_priv(vif);
 
+	wcn36xx_dbg(WCN36XX_DBG_MAC, "sw_scan_start");
+
 	wcn->sw_scan = true;
 	wcn->sw_scan_vif = vif;
 	if (vif_priv->sta_assoc)
@@ -720,6 +694,8 @@ static void wcn36xx_sw_scan_complete(struct ieee80211_hw *hw,
 				     struct ieee80211_vif *vif)
 {
 	struct wcn36xx *wcn = hw->priv;
+
+	wcn36xx_dbg(WCN36XX_DBG_MAC, "sw_scan_complete");
 
 	/* ensure that any scan session is finished */
 	wcn36xx_smd_finish_scan(wcn, HAL_SYS_MODE_SCAN, wcn->sw_scan_vif);
@@ -761,7 +737,7 @@ static void wcn36xx_update_allowed_rates(struct ieee80211_sta *sta,
 
 	if (sta->ht_cap.ht_supported) {
 		BUILD_BUG_ON(sizeof(sta->ht_cap.mcs.rx_mask) >
-			sizeof(sta_priv->supported_rates.supported_mcs_set));
+			     sizeof(sta_priv->supported_rates.supported_mcs_set));
 		memcpy(sta_priv->supported_rates.supported_mcs_set,
 		       sta->ht_cap.mcs.rx_mask,
 		       sizeof(sta->ht_cap.mcs.rx_mask));
@@ -1122,7 +1098,7 @@ static int wcn36xx_ampdu_action(struct ieee80211_hw *hw,
 	u16 tid = params->tid;
 	u16 *ssn = &params->ssn;
 	int ret = 0;
-	u8 session;
+	int session;
 
 	wcn36xx_dbg(WCN36XX_DBG_MAC, "mac ampdu action action %d tid %d\n",
 		    action, tid);
@@ -1134,9 +1110,11 @@ static int wcn36xx_ampdu_action(struct ieee80211_hw *hw,
 		sta_priv->tid = tid;
 		session = wcn36xx_smd_add_ba_session(wcn, sta, tid, ssn, 0,
 						     get_sta_index(vif, sta_priv));
+		if (session < 0) {
+			ret = session;
+			goto out;
+		}
 		wcn36xx_smd_add_ba(wcn, session);
-		wcn36xx_smd_trigger_ba(wcn, get_sta_index(vif, sta_priv), tid,
-				       session);
 		break;
 	case IEEE80211_AMPDU_RX_STOP:
 		wcn36xx_smd_del_ba(wcn, tid, get_sta_index(vif, sta_priv));
@@ -1146,6 +1124,18 @@ static int wcn36xx_ampdu_action(struct ieee80211_hw *hw,
 		sta_priv->ampdu_state[tid] = WCN36XX_AMPDU_START;
 		spin_unlock_bh(&sta_priv->ampdu_lock);
 
+		/* Replace the mac80211 ssn with the firmware one */
+		wcn36xx_dbg(WCN36XX_DBG_MAC, "mac ampdu ssn = %u\n", *ssn);
+		wcn36xx_smd_trigger_ba(wcn, get_sta_index(vif, sta_priv), tid, ssn);
+		wcn36xx_dbg(WCN36XX_DBG_MAC, "mac ampdu fw-ssn = %u\n", *ssn);
+
+		/* Start BA session */
+		session = wcn36xx_smd_add_ba_session(wcn, sta, tid, ssn, 1,
+						     get_sta_index(vif, sta_priv));
+		if (session < 0) {
+			ret = session;
+			goto out;
+		}
 		ret = IEEE80211_AMPDU_TX_START_IMMEDIATE;
 		break;
 	case IEEE80211_AMPDU_TX_OPERATIONAL:
@@ -1153,8 +1143,6 @@ static int wcn36xx_ampdu_action(struct ieee80211_hw *hw,
 		sta_priv->ampdu_state[tid] = WCN36XX_AMPDU_OPERATIONAL;
 		spin_unlock_bh(&sta_priv->ampdu_lock);
 
-		wcn36xx_smd_add_ba_session(wcn, sta, tid, ssn, 1,
-			get_sta_index(vif, sta_priv));
 		break;
 	case IEEE80211_AMPDU_TX_STOP_FLUSH:
 	case IEEE80211_AMPDU_TX_STOP_FLUSH_CONT:
@@ -1169,9 +1157,78 @@ static int wcn36xx_ampdu_action(struct ieee80211_hw *hw,
 		wcn36xx_err("Unknown AMPDU action\n");
 	}
 
+out:
 	mutex_unlock(&wcn->conf_mutex);
 
 	return ret;
+}
+
+static void wcn36xx_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+			  u32 queues, bool drop)
+{
+	struct wcn36xx *wcn = hw->priv;
+
+	if (wcn36xx_dxe_tx_flush(wcn)) {
+		wcn36xx_err("Failed to flush hardware tx queues\n");
+	}
+}
+
+static int wcn36xx_get_survey(struct ieee80211_hw *hw, int idx,
+			      struct survey_info *survey)
+{
+	struct wcn36xx *wcn = hw->priv;
+	struct ieee80211_supported_band *sband;
+	struct wcn36xx_chan_survey *chan_survey;
+	int band_idx;
+	unsigned long flags;
+
+	sband = wcn->hw->wiphy->bands[NL80211_BAND_2GHZ];
+	band_idx = idx;
+	if (band_idx >= sband->n_channels) {
+		band_idx -= sband->n_channels;
+		sband = wcn->hw->wiphy->bands[NL80211_BAND_5GHZ];
+	}
+
+	if (!sband || band_idx >= sband->n_channels)
+		return -ENOENT;
+
+	spin_lock_irqsave(&wcn->survey_lock, flags);
+
+	chan_survey = &wcn->chan_survey[idx];
+	survey->channel = &sband->channels[band_idx];
+	survey->noise = chan_survey->rssi - chan_survey->snr;
+	survey->filled = 0;
+
+	if (chan_survey->rssi > -100 && chan_survey->rssi < 0)
+		survey->filled |= SURVEY_INFO_NOISE_DBM;
+
+	if (survey->channel == wcn->channel)
+		survey->filled |= SURVEY_INFO_IN_USE;
+
+	spin_unlock_irqrestore(&wcn->survey_lock, flags);
+
+	wcn36xx_dbg(WCN36XX_DBG_MAC,
+		    "ch %d rssi %d snr %d noise %d filled %x freq %d\n",
+		    HW_VALUE_CHANNEL(survey->channel->hw_value),
+		    chan_survey->rssi, chan_survey->snr, survey->noise,
+		    survey->filled, survey->channel->center_freq);
+
+	return 0;
+}
+
+static void wcn36xx_sta_statistics(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+				   struct ieee80211_sta *sta, struct station_info *sinfo)
+{
+	struct wcn36xx *wcn;
+	u8 sta_index;
+	int status;
+
+	wcn = hw->priv;
+	sta_index = get_sta_index(vif, wcn36xx_sta_to_priv(sta));
+	status = wcn36xx_smd_get_stats(wcn, sta_index, HAL_GLOBAL_CLASS_A_STATS_INFO, sinfo);
+
+	if (status)
+		wcn36xx_err("wcn36xx_smd_get_stats failed\n");
 }
 
 static const struct ieee80211_ops wcn36xx_ops = {
@@ -1289,25 +1346,20 @@ static int wcn36xx_platform_get_resources(struct wcn36xx *wcn,
 {
 	struct device_node *mmio_node;
 	struct device_node *iris_node;
-	struct resource *res;
 	int index;
 	int ret;
 
 	/* Set TX IRQ */
-	res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "tx");
-	if (!res) {
-		wcn36xx_err("failed to get tx_irq\n");
-		return -ENOENT;
-	}
-	wcn->tx_irq = res->start;
+	ret = platform_get_irq_byname(pdev, "tx");
+	if (ret < 0)
+		return ret;
+	wcn->tx_irq = ret;
 
 	/* Set RX IRQ */
-	res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "rx");
-	if (!res) {
-		wcn36xx_err("failed to get rx_irq\n");
-		return -ENOENT;
-	}
-	wcn->rx_irq = res->start;
+	ret = platform_get_irq_byname(pdev, "rx");
+	if (ret < 0)
+		return ret;
+	wcn->rx_irq = ret;
 
 	/* Acquire SMSM tx enable handle */
 	wcn->tx_enable_state = qcom_smem_state_get(&pdev->dev,
@@ -1378,6 +1430,7 @@ static int wcn36xx_probe(struct platform_device *pdev)
 	void *wcnss;
 	int ret;
 	const u8 *addr;
+	int n_channels;
 
 	wcn36xx_dbg(WCN36XX_DBG_MAC, "platform probe\n");
 
@@ -1397,6 +1450,7 @@ static int wcn36xx_probe(struct platform_device *pdev)
 	mutex_init(&wcn->conf_mutex);
 	mutex_init(&wcn->hal_mutex);
 	mutex_init(&wcn->scan_lock);
+	__skb_queue_head_init(&wcn->amsdu);
 
 	ret = dma_set_mask_and_coherent(wcn->dev, DMA_BIT_MASK(32));
 	if (ret < 0) {
@@ -1460,6 +1514,8 @@ static int wcn36xx_remove(struct platform_device *pdev)
 
 	iounmap(wcn->dxe_base);
 	iounmap(wcn->ccu_base);
+
+	__skb_queue_purge(&wcn->amsdu);
 
 	mutex_destroy(&wcn->hal_mutex);
 	ieee80211_free_hw(hw);
